@@ -1,20 +1,36 @@
-E46M3のDMEチューニングを遊び倒すためのサポートツールをシェアしています。
-全てのアプリはHTML/JSで記述しており、ファイルをダウンロードすればChromium系ブラウザで動作するはずです。
-コードをフォークして、VScodeのGo Live等でプレビューでも問題なく動作します。
-コードをカスタマイズして機能を追加したり、別の車種に展開するなど大歓迎です。
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-# E46M3CSL_VETableEditor
+## Getting Started
 
-VEテーブルを、3D、2Dグラフに切り替えて手動調整するローカルWebアプリです。
-ramudaセンサーを使ったチューニングが一通り収束した後、最後の仕上げをやりやすくするためのツールです。
-VEテーブルの値は、コピー&ペーストまたはTSVで入れ替えできます。
+First, run the development server:
 
-# E46M3_PerformanceCompareTool_for_VANOSSetting
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
-VANOSセッティングの為に、データログで取得したMAF(空気流量)をVANOS角のテーブルサイズに合わせて集計し、セッティング前と後の差を可視化するアプリです。おまけで加速度を比較できるようにしましたが、データ処理精度が低く、パフォーマンスの差異が見えるかどうかはわかりません。
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-処理できるファイルはTrackAddictのRAWデータ(CSV)か、Interpolateデータ(CSV)のいずれかのみです。
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-# E46M3CSLConvert_VANOSTableEditor
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-VANOSテーブルの値から、負荷(スロットル開度%)とエンジン回転数におけるバルブオーバーラップを動的に可視化したツールです。現在はカムプロフィールは標準M3固定ですが、そのうち可変にできるようアップデートする予定です。
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
