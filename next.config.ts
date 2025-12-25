@@ -5,8 +5,8 @@ const repoName = 'E46M3CSL_TuningTool';
 
 const nextConfig: NextConfig = {
   output: 'export',
-  basePath: isProd ? `/${repoName}` : '',
-  assetPrefix: isProd ? `/${repoName}/` : '',
+  // basePath: isProd ? `/${repoName}` : '', // Custom Domain uses root path
+  // assetPrefix: isProd ? `/${repoName}/` : '', // Custom Domain uses root path
   // Optional: Disable image optimization since it requires server
   images: {
     unoptimized: true,
