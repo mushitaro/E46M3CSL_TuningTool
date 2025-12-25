@@ -16,7 +16,7 @@ import { VEMap, ProcessedLog, LogDataPoint, LogFilterConfig, InterpolationPoint 
 import { FilterConfigPanel } from '@/components/FilterConfigPanel';
 import { InterpolationTableEditor } from '@/components/InterpolationTableEditor';
 import { LogDataTable } from '@/components/LogDataTable';
-import { AlertCircle, CheckCircle, Download, FileCode, FileSpreadsheet, Settings, Power, Zap, Thermometer, Cpu, Trash2, Github } from 'lucide-react';
+import { AlertCircle, CheckCircle, Download, FileCode, FileSpreadsheet, Settings, Power, Zap, Thermometer, Cpu, Trash2, Github, BookOpen } from 'lucide-react';
 import { APP_CONFIG, MAP_DIMENSIONS, RPM_AXIS, TPS_AXIS, CSL_STOCK_MAP_DATA } from '@/config/constants';
 
 export default function Home() {
@@ -342,16 +342,30 @@ export default function Home() {
           </h1>
         </div>
 
-        {/* GitHub Link */}
-        <a
-          href="https://github.com/mushitaro/mss54hp-csl-convert-tuner"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-slate-500 hover:text-slate-300 transition-colors"
-          title="View on GitHub"
-        >
-          <Github className="w-5 h-5" />
-        </a>
+        <div className="flex items-center gap-4">
+          {/* Forum Link */}
+          <a
+            href="https://nam3forum.com/forums/forum/special-interests/coding-tuning/242281-a-quick-and-easy-way-to-street-tune-your-csl-conversion-for-drivability"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-slate-500 hover:text-amber-400 transition-colors flex items-center gap-2 group"
+            title="Methodology Source: NA M3 Forum"
+          >
+            <BookOpen className="w-4 h-4" />
+            <span className="text-[10px] uppercase font-bold tracking-wider hidden sm:block opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0">Tuning Guide</span>
+          </a>
+
+          {/* GitHub Link */}
+          <a
+            href="https://github.com/mushitaro/mss54hp-csl-convert-tuner"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-slate-500 hover:text-slate-300 transition-colors"
+            title="View on GitHub"
+          >
+            <Github className="w-5 h-5" />
+          </a>
+        </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
