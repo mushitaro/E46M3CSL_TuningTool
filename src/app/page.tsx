@@ -16,7 +16,7 @@ import { VEMap, ProcessedLog, LogDataPoint, LogFilterConfig, InterpolationPoint 
 import { FilterConfigPanel } from '@/components/FilterConfigPanel';
 import { InterpolationTableEditor } from '@/components/InterpolationTableEditor';
 import { LogDataTable } from '@/components/LogDataTable';
-import { AlertCircle, CheckCircle, Download, FileCode, FileSpreadsheet, Settings, Power, Zap, Thermometer, Cpu, Trash2 } from 'lucide-react';
+import { AlertCircle, CheckCircle, Download, FileCode, FileSpreadsheet, Settings, Power, Zap, Thermometer, Cpu, Trash2, Github } from 'lucide-react';
 import { APP_CONFIG, MAP_DIMENSIONS, RPM_AXIS, TPS_AXIS, CSL_STOCK_MAP_DATA } from '@/config/constants';
 
 export default function Home() {
@@ -341,6 +341,17 @@ export default function Home() {
             MSS54HP CSL CONVERT <span className="text-slate-600">///</span> TUNER
           </h1>
         </div>
+
+        {/* GitHub Link */}
+        <a
+          href="https://github.com/mushitaro/mss54hp-csl-convert-tuner"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-slate-500 hover:text-slate-300 transition-colors"
+          title="View on GitHub"
+        >
+          <Github className="w-5 h-5" />
+        </a>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
