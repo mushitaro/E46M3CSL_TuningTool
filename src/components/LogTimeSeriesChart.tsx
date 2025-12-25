@@ -4,7 +4,7 @@ import { LogDataPoint } from '@/lib/types';
 import { Layout, Data } from 'plotly.js';
 
 // Dynamically import Plotly to avoid SSR issues
-const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
+const Plot = dynamic(() => import('react-plotly.js'), { ssr: false }) as React.ComponentType<any>;
 
 interface Props {
     data: LogDataPoint[];
@@ -102,13 +102,13 @@ export const LogTimeSeriesChart: React.FC<Props> = ({ data, selectedIndex, onPoi
             bgcolor: 'rgba(0,0,0,0)',
         },
         xaxis: {
-            title: 'Time (s)',
+            title: { text: 'Time (s)' },
             color: '#64748b',
             gridcolor: '#1e293b',
             zerolinecolor: '#334155',
         },
         yaxis: {
-            title: 'RPM / Load',
+            title: { text: 'RPM / Load' },
             color: '#94a3b8',
             gridcolor: '#1e293b',
             zerolinecolor: '#334155',
@@ -209,12 +209,10 @@ export const LogTimeSeriesChart: React.FC<Props> = ({ data, selectedIndex, onPoi
             spikedash: 'solid',
             spikemode: 'across',
             spikecolor: 'rgba(148, 163, 184, 0.2)', // Slate-400 with 20% opacity (Very subtle)
-            snap: true, // Snap to data points
         },
         // RPM (Left)
         yaxis: {
-            title: { text: 'RPM' },
-            titlefont: { color: '#94a3b8' },
+            title: { text: 'RPM', font: { color: '#94a3b8' } },
             tickfont: { color: '#94a3b8' },
             side: 'left',
             range: [0, 9000],
@@ -228,8 +226,7 @@ export const LogTimeSeriesChart: React.FC<Props> = ({ data, selectedIndex, onPoi
         },
         // Lambda (Right)
         yaxis2: {
-            title: { text: 'Lambda' },
-            titlefont: { color: '#4ade80' },
+            title: { text: 'Lambda', font: { color: '#4ade80' } },
             tickfont: { color: '#4ade80' },
             overlaying: 'y',
             side: 'right',
@@ -243,8 +240,7 @@ export const LogTimeSeriesChart: React.FC<Props> = ({ data, selectedIndex, onPoi
         // If I put Load on Left, visually 100 sits at the very bottom of the 9000 RPM range.
         // I will map Load to Y3, on the Left, overlaid, range 0-120.
         yaxis3: {
-            title: { text: 'Load %' },
-            titlefont: { color: '#3b82f6' },
+            title: { text: 'Load %', font: { color: '#3b82f6' } },
             tickfont: { color: '#3b82f6' },
             overlaying: 'y',
             side: 'right',
@@ -335,7 +331,7 @@ export const LogTimeSeriesChart: React.FC<Props> = ({ data, selectedIndex, onPoi
                 // Actually, if we put onClick on wrapper, we want bubble up.
                 // Plot needs pointer-events: auto (default).
                 useResizeHandler={true}
-                onHover={(e) => {
+                onHover={(e: any) => {
                     if (e.points && e.points.length > 0) {
                         lastHoveredIndex.current = e.points[0].pointIndex;
                     }
