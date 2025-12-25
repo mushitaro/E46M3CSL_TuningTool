@@ -13,12 +13,12 @@ First of all, I would like to express my gratitude to everyone who contributes d
 The tool automates and combines the following steps:
 
 1. **Disabling MAP & LTFT compensation** (replacing TunerPro steps)
-2. **RO (Relative Air Mass) Correction** (replacing AQ_REL to AQ_REL_ALPHA_N Logfile Converter)
+2. **RO (Relative Opening) Correction** (replacing AQ_REL to AQ_REL_ALPHA_N Logfile Converter)
 3. **Lambda Value Aggregation** (replacing MegaLogViewer)
 4. **Tuning VE Calculation** (replacing "VE Tuning With Lambda Integrators" spreadsheet)
 5. **VE Comparison vs. Stock CSL**
-6. **VE Table Editing** (replacing manual hex editing)
-7. **Re-enabling MAP & LTFT compensation**
+6. **VE Table Editing** (replacing TunerPro steps)
+7. **Re-enabling MAP & LTFT compensation** (replacing TunerPro steps)
 
 In short, the previously labor-intensive process is now streamlined: simply upload your **Partial BIN** and **TESTO LOG CSV**, click the **BIN** download button, and the process is complete.
 
