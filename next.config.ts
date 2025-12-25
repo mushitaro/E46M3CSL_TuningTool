@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const isProd = process.env.NODE_ENV === 'production';
-const repoName = 'E46M3CSL_TuningTool';
+const repoName = 'mss54hp-csl-convert-tuner';
 
 const nextConfig: NextConfig = {
   output: 'export',
