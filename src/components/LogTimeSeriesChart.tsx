@@ -276,6 +276,17 @@ export const LogTimeSeriesChart: React.FC<Props> = ({ data, selectedIndex, onPoi
             className="w-full h-full min-h-[300px]"
             onClick={(e) => {
                 if (onPointClick) {
+                    // [FIX] Global Bounds Check first: Ignore clicks in margins (Legend, X-Axis)
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const y = e.clientY - rect.top; // [NEW] Get Y coordinate
+
+                    const marginT = 30; // Matches advancedLayout.margin.t (Legend Area)
+                    const marginB = 40; // Matches advancedLayout.margin.b (Axis Area)
+
+                    if (y < marginT || y > rect.height - marginB) {
+                        return;
+                    }
+
                     // Method 1: Use last hovered point (Most accurate, handles Zoom/Pan)
                     if (lastHoveredIndex.current !== null) {
                         onPointClick(lastHoveredIndex.current);
@@ -286,10 +297,12 @@ export const LogTimeSeriesChart: React.FC<Props> = ({ data, selectedIndex, onPoi
                     // Assumption: Default View (Not zoomed/panned yet)
                     // If user is zooming/panning, they likely hovered recently, so Method 1 should trigger.
                     // This fallback purely fixes the "Just uploaded, click immediately" dead zone.
-                    const rect = e.currentTarget.getBoundingClientRect();
                     const x = e.clientX - rect.left;
+
                     const marginL = 60; // Matches advancedLayout.margin.l
                     const marginR = 60; // Matches advancedLayout.margin.r
+
+
                     const plotWidth = rect.width - marginL - marginR;
 
                     // Ratio within the plotting area
@@ -316,10 +329,16 @@ export const LogTimeSeriesChart: React.FC<Props> = ({ data, selectedIndex, onPoi
                     { ...chartData[2], yaxis: 'y3' } as Data, // Corr RO
                     ...(chartData.slice(3).map(d => ({ ...d, yaxis: 'y2' }))) as Data[] // Lambdas
                 ]}
+                style={{ width: '100%', height: '100%', pointerEvents: 'auto' }} // [FIX] Enable pointer events for Zoom/Pan
+                // uirevision: used to preserve state (zoom/pan) across re-renders.
+                // We use data[0].time as revision key.
+                // If data shifts (window slide), time changes -> Reset Zoom (Good).
+                // If toggle button clicked -> data identical -> Preserve Zoom (Good).
                 layout={{
                     ...advancedLayout,
                     clickmode: 'event', // Force click events
                     dragmode: 'pan',
+                    uirevision: data.length > 0 ? data[0].time : 'init'
                 }}
                 config={{
                     displayModeBar: false,
@@ -327,9 +346,6 @@ export const LogTimeSeriesChart: React.FC<Props> = ({ data, selectedIndex, onPoi
                     responsive: true,
                     doubleClick: false,
                 }}
-                style={{ width: '100%', height: '100%', pointerEvents: 'none' }} // Let clicks pass to wrapper? No, Plot needs pointer events for Pan.
-                // Actually, if we put onClick on wrapper, we want bubble up.
-                // Plot needs pointer-events: auto (default).
                 useResizeHandler={true}
                 onHover={(e: any) => {
                     if (e.points && e.points.length > 0) {

@@ -1,5 +1,9 @@
 # MSS54HP CSL CONVERT /// TUNER
 
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 ## Overview
 
 This application integrates the various tuning processes for the E46 M3 CSL Conversion currently shared in the community into a single, streamlined workflow.
