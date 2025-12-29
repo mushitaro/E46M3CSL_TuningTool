@@ -17,7 +17,7 @@ import { FilterConfigPanel } from '@/components/FilterConfigPanel';
 import { InterpolationTableEditor } from '@/components/InterpolationTableEditor';
 import { LogDataTable } from '@/components/LogDataTable';
 import { AlertCircle, CheckCircle, Download, FileCode, FileSpreadsheet, Settings, Power, Zap, Thermometer, Cpu, Trash2, Github, BookOpen } from 'lucide-react';
-import { APP_CONFIG, MAP_DIMENSIONS, RPM_AXIS, TPS_AXIS, CSL_STOCK_MAP_DATA } from '@/config/constants';
+import { APP_CONFIG, MAP_DIMENSIONS, RPM_AXIS, TPS_AXIS, CSL_STOCK_MAP_DATA, CSL_STOCK_WARMUP_RPM, CSL_STOCK_WARMUP_LOAD, CSL_STOCK_WOT_RPM, CSL_STOCK_WOT_LOAD } from '@/config/constants';
 
 export default function Home() {
   // State
@@ -54,8 +54,17 @@ export default function Home() {
   const [correctionMap, setCorrectionMap] = useState<number[][] | null>(null);
   const [weightMap, setWeightMap] = useState<number[][] | null>(null);
 
+  // [EXPERIMENTAL]
+  const [warmupMap, setWarmupMap] = useState<VEMap | null>(null);
+  const [wotMap, setWotMap] = useState<VEMap | null>(null);
+
+  // [EXPERIMENTAL] UI Controls
+  const [applyWotDisable, setApplyWotDisable] = useState<boolean>(false); // Default OFF
+  const [writeWarmup, setWriteWarmup] = useState<boolean>(false); // Default OFF
+  const [writeWot, setWriteWot] = useState<boolean>(false); // Default OFF
+
   const [patchStatus, setPatchStatus] = useState<{ mapOff: boolean; tempLimit: boolean } | null>(null);
-  const [activeTab, setActiveTab] = useState<'current' | 'lambda' | 'new' | 'diff' | 'log'>('current');
+  const [activeTab, setActiveTab] = useState<'current' | 'lambda' | 'new' | 'diff' | 'log' | 'warmup' | 'wot'>('current');
   const [debugHex, setDebugHex] = useState<string>('');
   const [applyPatch, setApplyPatch] = useState<boolean>(false);
 
@@ -80,6 +89,29 @@ export default function Home() {
     if (!processedLog) return [];
     return processedLog.data.slice(logWindowStart, logWindowStart + LOG_WINDOW_SIZE);
   }, [processedLog, logWindowStart]);
+
+  // [EXPERIMENTAL] Auto-gen Warmup Map Effect
+  useEffect(() => {
+    if (newMap) {
+      try {
+        const calc = new VECalculator();
+        const wMap = calc.generateWarmupMap(newMap);
+        setWarmupMap(wMap);
+
+        const wotData = calc.generateWOTMap(newMap);
+        setWotMap({
+          xAxis: CSL_STOCK_WOT_RPM,
+          yAxis: CSL_STOCK_WOT_LOAD,
+          data: wotData
+        });
+      } catch (e) {
+        console.error("Failed to gen experimental maps", e);
+      }
+    } else {
+      setWarmupMap(null);
+      setWotMap(null);
+    }
+  }, [newMap]);
 
   // Logic
   const handleBinaryUpload = async (file: File) => {
@@ -109,6 +141,9 @@ export default function Home() {
       const tempVal = parser.getTempThreshold();
       const isTempHigh = tempVal >= 99;
 
+      // Check WOT status
+      const isWotDisabled = parser.getWOTThresholdStatus();
+
       setPatchStatus({
         mapOff: isMapOff, // True if OFF
         tempLimit: isTempHigh
@@ -120,6 +155,9 @@ export default function Home() {
       } else {
         setApplyPatch(false);
       }
+
+      // Auto-set WOT toggle
+      setApplyWotDisable(isWotDisabled);
 
       // Validating size/axes
       console.log('Parsed Map:', map);
@@ -166,6 +204,14 @@ export default function Home() {
     setCorrectionMap(result.correctionMap);
     setWeightMap(result.weightMap); // [NEW]
 
+    // [EXPERIMENTAL] Auto-gen Warmup Map for Visualization
+    try {
+      const wMap = calc.generateWarmupMap(result.newMap);
+      setWarmupMap(wMap);
+    } catch (e) {
+      console.error("Failed to gen warmup map", e);
+    }
+
     // Auto-switch view to Diff if logic runs successfully, and set sensible defaults if needed
     if (diffSubject === 'current' && diffReference === 'stock') {
       // If user was looking at Current vs Stock, maybe switch to Tuned vs Stock?
@@ -203,7 +249,9 @@ export default function Home() {
       setHitMap(null);
       setCorrectionMap(null);
       setNewMap(null);
+      setNewMap(null);
       setWeightMap(null);
+      setWarmupMap(null);
       setLogWindowStart(0);
       setSelectedLogIndex(null);
       // Reset diff comparison state if needed, or keep it
@@ -245,28 +293,36 @@ export default function Home() {
     // Apply New Map if exists
     if (newMap) {
       patcher.setVETable(newMap);
+
+      // [EXPERIMENTAL] Auto-gen derivative maps
+      const calc = new VECalculator();
+
+      if (writeWarmup) {
+        const warmupMap = calc.generateWarmupMap(newMap);
+        patcher.setWarmupTable(warmupMap);
+      }
+
+      if (writeWot) {
+        const wotData = calc.generateWOTMap(newMap);
+        patcher.setWOTMap(wotData);
+      }
     }
 
     // Apply or Revert Logic Patch
     if (applyPatch) {
       patcher.disableMapCorrection();
-      patcher.setTempThreshold(100); // 100C limit to stop adaptation
+      // Temp threshold handled in disableMapCorrection (User request: consistency)
     } else {
       // Revert to Stock/Enabled behavior if user explicitly turned it OFF
       // and we are generating a file.
       patcher.enableMapCorrection();
-      // [FIX] Revert Temp Threshold to Stock (Low Value / Always Adapt)
-      // We assume Raw 0 (-48C) is safe stock behavior to re-enable adaptation.
-      // patcher.setTempThreshold(APP_CONFIG.CONSTANTS.STOCK_TEMP_VAL - 48); // setTempThreshold adds 48, so we pass (0 - 48)? No.
-      // Wait, patcher.setTempThreshold(val) does: this.setUint8(..., val + 48).
-      // If I want raw value 0, I should pass -48?
-      // Check patcher.ts logic.
-      // "public setTempThreshold(tempDegC: number): void { this.setUint8(..., tempDegC + 48); }"
-      // If I want 0x00 (Raw 0), I need input -48. Correct.
-      // But APP_CONFIG.CONSTANTS.STOCK_TEMP_VAL is 0 (Raw).
-      // So I should pass -48.
-      patcher.setTempThreshold(-48);
+      // Temp threshold handled in enableMapCorrection (set to 69C)
     }
+
+    // [EXPERIMENTAL] WOT Threshold Patch (Independent of Logic Patch)
+    // If Checked (applyWotDisable = true) -> SET Threshold to 100% (Disable WOT Mode)
+    // If Unchecked -> SET Threshold to Stock (Enable WOT Mode)
+    patcher.setWOTThreshold(applyWotDisable);
 
     // Filename Generation
     const dateStr = getFormattedDate();
@@ -382,13 +438,17 @@ export default function Home() {
                 { id: 'new', label: 'TUNED MAP' },
                 { id: 'diff', label: 'DIFFERENCE %' },
                 { id: 'log', label: 'CORRECTED ROG' },
+                { id: 'warmup', label: 'WARMUP (DERIVED / EXP.)' },
+                { id: 'wot', label: 'WOT (DERIVED / EXP.)' },
               ].map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
                   disabled={
                     (tab.id === 'log' && !processedLog) ||
-                    (tab.id !== 'current' && tab.id !== 'log' && tab.id !== 'diff' && !newMap) || // Allow Diff if currentMap exists (handled by activeTab check)
+                    (tab.id === 'warmup' && !warmupMap) ||
+                    (tab.id === 'wot' && !wotMap) ||
+                    (tab.id !== 'current' && tab.id !== 'log' && tab.id !== 'diff' && tab.id !== 'warmup' && tab.id !== 'wot' && !newMap) || // Allow Diff if currentMap exists (handled by activeTab check)
                     (tab.id === 'diff' && !currentMap) || // Enable Diff if Current Map is loaded (even if no Tuned Map)
                     (tab.id === 'lambda' && !correctionMap)
                   }
@@ -516,6 +576,14 @@ export default function Home() {
                 />
               )}
 
+              {(activeTab === 'warmup' && warmupMap) && (
+                <MapEditor mapData={warmupMap} />
+              )}
+
+              {(activeTab === 'wot' && wotMap) && (
+                <MapEditor mapData={wotMap} />
+              )}
+
               {(activeTab === 'log' && processedLog) && (
                 <div className="h-full w-full pb-0">
                   <LogDataTable
@@ -560,6 +628,8 @@ export default function Home() {
               {(activeTab === 'lambda' && correctionMap && newMap) && (
                 <MapVisualizer mapData={{ ...newMap, data: correctionMap }} title="" zAxisLabel="Lambda" />
               )}
+              {(activeTab === 'warmup' && warmupMap) && <MapVisualizer mapData={warmupMap} title="" zAxisLabel="RF %" />}
+              {(activeTab === 'wot' && wotMap) && <MapVisualizer mapData={wotMap} title="" zAxisLabel="RF %" />}
               {(activeTab === 'log' && processedLog) && (
                 <div className="h-full w-full pb-0 relative">
                   {/* Chart Container - Absolute fill to ensure responsiveness */}
@@ -615,77 +685,117 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* SPACER for bottom alignment */}
-              <div className="flex-1"></div>
-
-              {/* DASHBOARD CLUSTER (Minimal Saturn) */}
+              {/* DASHBOARD CLUSTER (Harmonized Scale & Layout) */}
               {binaryFile && patchStatus && (
-                <div className="relative fade-in-up">
+                <div className="relative fade-in-up mt-12 mb-12 select-none flex justify-center items-center">
 
-                  {/* Toggle Switch - Standard Design */}
-                  <div className="flex justify-center mb-6">
-                    <label className="flex items-center gap-3 cursor-pointer group">
-                      <span className={`text-[9px] uppercase tracking-widest transition-colors ${applyPatch ? 'text-slate-500' : 'text-slate-400'}`}>
+                  {/* --- LEFT WING (Convex Arc) --- */}
+                  <div className="flex flex-col items-end gap-[18px] mr-3">
+
+                    {/* ROW 1: PATCH TOGGLE (Close to Ring) */}
+                    <div className="h-7 flex items-center gap-3 mr-1 opacity-90 hover:opacity-100 transition-opacity">
+                      <span className={`text-[10px] font-bold tracking-widest uppercase transition-colors ${applyPatch ? 'text-blue-400' : 'text-slate-500'}`}>
                         PATCH
                       </span>
-                      <div className="relative inline-flex items-center">
+                      <label className="relative inline-flex items-center cursor-pointer group">
                         <input type="checkbox" className="sr-only peer" checked={applyPatch} onChange={(e) => setApplyPatch(e.target.checked)} />
-                        <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-900 peer-checked:after:bg-blue-400"></div>
+                        <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-gray-500 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-900 peer-checked:after:bg-blue-400"></div>
+                      </label>
+                    </div>
+
+                    {/* ROW 2: MAP STATUS (Pushed Away/Far) */}
+                    <div className="h-7 flex items-center gap-4 mr-8 pr-1">
+                      <span className="text-[10px] font-bold text-slate-600 tracking-widest uppercase">MAP</span>
+                      <div className="flex items-center justify-end w-8">
+                        <span className={`text-[11px] font-mono font-bold tracking-wider ${applyPatch ? 'text-amber-500' : 'text-slate-500'}`}>
+                          {applyPatch ? 'OFF' : 'ON'}
+                        </span>
                       </div>
-                    </label>
+                    </div>
+
+                    {/* ROW 3: LTFT STATUS (Close to Ring) */}
+                    <div className="h-7 flex items-center gap-3 mr-1 opacity-90 transition-opacity">
+                      <span className="text-[10px] font-bold text-slate-600 tracking-widest uppercase">LTFT MIN</span>
+                      <div className="flex items-center justify-end w-8">
+                        <span className={`text-[11px] font-mono font-bold tracking-wider ${applyPatch ? 'text-amber-500' : 'text-slate-500'}`}>
+                          {applyPatch ? '100' : 'OEM'}
+                        </span>
+                      </div>
+                    </div>
+
                   </div>
 
-                  {/* Central Hub Layout - Reduced Noise */}
-                  <div className="flex items-center justify-center gap-6">
 
-                    {/* LEFT WING (MAP) */}
-                    <div className="flex flex-col items-end pt-2">
-                      <span className="text-[9px] text-slate-600 uppercase tracking-widest mb-1">MAP</span>
-                      {applyPatch ? ( // Use applyPatch state for display to reflect user intent
-                        <span className="text-xs font-bold text-green-500 font-mono tracking-wider shadow-green-500/20 drop-shadow-sm">OFF</span>
-                      ) : (
-                        <span className="text-xs font-bold text-slate-700 font-mono tracking-wider">ON</span>
-                      )}
+                  {/* --- CENTRAL HUB: DOWNLOAD RING --- */}
+                  <div className="relative group mx-2 z-10">
+                    {/* Outer Glow/Border Ring */}
+                    <div className={`absolute -inset-1 rounded-full border border-slate-800 opacity-100 transition-all duration-500 ${(newMap || (binaryBuffer && applyPatch)) ? 'border-blue-500/30' : ''}`}></div>
+
+                    <button
+                      onClick={() => handleDownloadBin()}
+                      disabled={!binaryBuffer}
+                      className={`
+                            relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 active:scale-95
+                            ${binaryBuffer
+                          ? 'bg-slate-900 hover:bg-slate-800 text-blue-500 hover:text-blue-400 border border-slate-700 shadow-2xl cursor-pointer ring-1 ring-slate-800'
+                          : 'bg-slate-900/50 border border-slate-800/50 text-slate-800 cursor-not-allowed'}
+                        `}
+                    >
+                      <Download className={`w-7 h-7 transition-transform duration-300 stroke-[1.5] ${binaryBuffer ? 'group-hover:scale-110' : ''}`} />
+                    </button>
+
+                    {/* TUNE START Label */}
+                    <div className="absolute -bottom-11 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                      <span className={`text-[11px] tracking-[0.3em] font-medium transition-all duration-500 ${(newMap || (binaryBuffer && applyPatch)) ? 'text-blue-500' : 'text-transparent'} `}>
+                        TUNE START
+                      </span>
+                    </div>
+                  </div>
+
+
+                  {/* --- RIGHT WING (Convex Arc) --- */}
+                  <div className="flex flex-col items-start gap-[18px] ml-3">
+
+                    {/* ROW 1: WOT TH 100 (Close to Ring) */}
+                    <div className="h-7 flex items-center gap-3 ml-1 opacity-90 hover:opacity-100 transition-opacity">
+                      <label className="relative inline-flex items-center cursor-pointer group">
+                        <input type="checkbox" className="sr-only peer" checked={applyWotDisable} onChange={(e) => setApplyWotDisable(e.target.checked)} />
+                        <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-gray-500 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-900 peer-checked:after:bg-blue-400"></div>
+                      </label>
+                      <span className={`text-[10px] font-bold tracking-widest uppercase transition-colors ${applyWotDisable ? 'text-blue-400' : 'text-slate-500'}`}>
+                        WOT TH
+                      </span>
+                      <span className={`text-[11px] font-mono font-bold tracking-wider ml-1 ${applyWotDisable ? 'text-amber-500' : 'text-slate-500'}`}>
+                        {applyWotDisable ? '102.3' : 'OEM'}
+                      </span>
                     </div>
 
-                    {/* CENTER CORE (BUTTON) - Download Icon Restored */}
-                    <div className="relative z-10 group">
-                      <button
-                        onClick={handleDownloadBin}
-                        disabled={!binaryBuffer}
-                        className={`
-                                    w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 active:scale-95
-                                    ${binaryBuffer
-                            ? 'bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 border border-slate-700 shadow-lg cursor-pointer'
-                            : 'bg-slate-900/50 border border-slate-800/50 text-slate-800 cursor-not-allowed'}
-                                `}
-                      >
-                        <Download className={`w-5 h-5 transition-transform duration-300 ${binaryBuffer ? 'group-hover:scale-110' : ''}`} />
-                      </button>
+                    {/* ROW 2: WRITE WARMUP (Pushed Away/Far) */}
+                    <div className="h-7 flex items-center gap-4 ml-8 pl-1">
+                      <label className="relative inline-flex items-center cursor-pointer group">
+                        <input type="checkbox" className="sr-only peer" checked={writeWarmup} onChange={(e) => setWriteWarmup(e.target.checked)} />
+                        <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-gray-500 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-900 peer-checked:after:bg-blue-400"></div>
+                      </label>
+                      <span className={`text-[10px] font-bold tracking-widest uppercase transition-colors ${writeWarmup ? 'text-blue-400' : 'text-slate-500'}`}>
+                        WRITE WARMUP
+                      </span>
                     </div>
 
-                    {/* RIGHT WING (LTFT MIN) */}
-                    <div className="flex flex-col items-start pt-2">
-                      <span className="text-[9px] text-slate-600 uppercase tracking-widest mb-1">LTFT MIN</span>
-                      {applyPatch ? ( // Use applyPatch state for display
-                        <span className="text-xs font-bold text-green-500 font-mono tracking-wider shadow-green-500/20 drop-shadow-sm">100°C</span>
-                      ) : (
-                        <span className="text-xs font-bold text-slate-700 font-mono tracking-wider">OEM</span>
-                      )}
+                    {/* ROW 3: WRITE WOT (Close to Ring) */}
+                    <div className="h-7 flex items-center gap-3 ml-1 opacity-90 hover:opacity-100 transition-opacity">
+                      <label className="relative inline-flex items-center cursor-pointer group">
+                        <input type="checkbox" className="sr-only peer" checked={writeWot} onChange={(e) => setWriteWot(e.target.checked)} />
+                        <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-gray-500 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-900 peer-checked:after:bg-blue-400"></div>
+                      </label>
+                      <span className={`text-[10px] font-bold tracking-widest uppercase transition-colors ${writeWot ? 'text-blue-400' : 'text-slate-500'}`}>
+                        WRITE WOT
+                      </span>
                     </div>
 
-                  </div >
+                  </div>
 
-                  {/* Bottom Status Text - Floating */}
-                  < div className="text-center mt-5" >
-                    <span className={`text - [10px] tracking - [0.3em] font - medium uppercase transition - all duration - 500 ${(newMap || (binaryBuffer && applyPatch)) ? 'text-blue-500' : 'text-transparent'} `}>
-                      TUNE START
-                    </span>
-                  </div >
-
-                </div >
-              )
-              }
+                </div>
+              )}
 
               {
                 !binaryFile && (

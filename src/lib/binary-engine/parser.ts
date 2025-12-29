@@ -1,4 +1,4 @@
-import { APP_CONFIG } from '@/config/constants';
+import { APP_CONFIG, EXPERIMENTAL_CONFIG } from '@/config/constants';
 import { VEMap } from '@/lib/types';
 
 export class BinaryParser {
@@ -10,6 +10,14 @@ export class BinaryParser {
         this.buffer = buffer;
         this.view = new DataView(buffer);
         this.uint8Array = new Uint8Array(buffer);
+    }
+    // ... (skip unchanged methods)
+    public getWOTThresholdStatus(): boolean {
+        const addr = EXPERIMENTAL_CONFIG.ADDRESS_WOT_THRESHOLD_MAP;
+        // Read first two bytes (one value)
+        const val = this.getUint16(addr);
+        // If > 1000 (100%), it's disabled. Stock is usually much lower or specific map.
+        return val > 1000;
     }
 
     public getBuffer(): ArrayBuffer {
@@ -66,6 +74,8 @@ export class BinaryParser {
         // Value = Temp + 48. So Temp = Value - 48.
         return val - 48;
     }
+
+
 
     private validateOffset(offset: number, size: number) {
         if (offset + size > this.buffer.byteLength) {

@@ -1,5 +1,5 @@
 import { LogDataPoint, VEMap } from '@/lib/types';
-import { APP_CONFIG } from '@/config/constants';
+import { APP_CONFIG, CSL_STOCK_MAP_DATA, CSL_STOCK_WARMUP_MAP, CSL_STOCK_WOT_MAP, CSL_STOCK_WARMUP_RPM, CSL_STOCK_WARMUP_LOAD, CSL_STOCK_WOT_RPM } from '@/config/constants';
 
 interface GridCell {
     sumStftWeighted: number; // Sum(STFT * Weight)
@@ -171,5 +171,138 @@ export class VECalculator {
         add(load.idx1, rpm.idx2, load.w1 * rpm.w2);
         add(load.idx2, rpm.idx1, load.w2 * rpm.w1);
         add(load.idx2, rpm.idx2, load.w2 * rpm.w2);
+    }
+
+    /**
+     * [EXPERIMENTAL] Auto-generates a Warmup Map based on the Tuned VE Map.
+     * Logic: NewWarmup = NewVE_Intep * (StockWarmup / StockVE_Interp)
+     * Handles Axis Mismatch by interpolating Main VE maps to match Warmup Map axes.
+     */
+    public generateWarmupMap(newVEMap: VEMap): VEMap {
+        const stockVE = { // Construct VEMap object for Stock Data
+            xAxis: APP_CONFIG.MSS54HP.AXIS_RPM,
+            yAxis: APP_CONFIG.MSS54HP.AXIS_LOAD,
+            data: CSL_STOCK_MAP_DATA
+        };
+        const stockWarmup = CSL_STOCK_WARMUP_MAP;
+
+        // Use the specific axes for Cold Map
+        const targetRpmAxis = CSL_STOCK_WARMUP_RPM;
+        const targetLoadAxis = CSL_STOCK_WARMUP_LOAD;
+
+        // Validation - ensure dimensions match our constants
+        if (stockWarmup.length !== targetLoadAxis.length || stockWarmup[0].length !== targetRpmAxis.length) {
+            console.warn("Stock Warmup Map dimensions mismatch with defined Constants. Returning New VE Map fallback.");
+            return newVEMap;
+        }
+
+        const newWarmupData: number[][] = [];
+
+        for (let r = 0; r < targetLoadAxis.length; r++) {
+            const rowArr: number[] = [];
+            const load = targetLoadAxis[r];
+
+            for (let c = 0; c < targetRpmAxis.length; c++) {
+                const rpm = targetRpmAxis[c];
+
+                const sWarm = stockWarmup[r][c];
+
+                // Interpolate Main Maps at Cold Map (rpm, load)
+                // We need the value of the Main Map at this specific operating point
+                const sVE_Interp = this.interpolateMap(stockVE, rpm, load);
+                const nVE_Interp = this.interpolateMap(newVEMap, rpm, load);
+
+                // Calculate Ratio: Stock Warmup / Stock Main (Interpolated)
+                const ratio = sVE_Interp !== 0 ? sWarm / sVE_Interp : 1.0;
+
+                // New Warmup = New VE (Interpolated) * Ratio
+                rowArr.push(nVE_Interp * ratio);
+            }
+            newWarmupData.push(rowArr);
+        }
+
+        return {
+            xAxis: targetRpmAxis,    // Return map with ITS OWN axes
+            yAxis: targetLoadAxis,
+            data: newWarmupData
+        };
+    }
+
+    /**
+     * Bilinear Interpolation helper to get value from a Map at any (rpm, load)
+     */
+    private interpolateMap(map: VEMap, rpm: number, load: number): number {
+        // Find bounding indices
+        const rInfo = this.findBoundingIndices(load, map.yAxis); // Load is Y-axis
+        const cInfo = this.findBoundingIndices(rpm, map.xAxis);  // RPM is X-axis
+
+        if (!rInfo || !cInfo) return 0;
+
+        // 4 Neighbors
+        const v11 = map.data[rInfo.idx1][cInfo.idx1]; // Top-Left
+        const v12 = map.data[rInfo.idx1][cInfo.idx2]; // Top-Right
+        const v21 = map.data[rInfo.idx2][cInfo.idx1]; // Bottom-Left
+        const v22 = map.data[rInfo.idx2][cInfo.idx2]; // Bottom-Right
+
+        // Interpolate Logic
+        // Val = w1*w1*v11 + w1*w2*v12 ... 
+        // My weights are: w1 (lower index weight), w2 (higher index weight)
+        // rInfo.w1 is weight for idx1 (lower). rInfo.w2 is weight for idx2 (higher).
+
+        // Lerp Formula: V = V_low * w_low + V_high * w_high
+        const valRow1 = v11 * cInfo.w1 + v12 * cInfo.w2; // Interpolate X at Row 1
+        const valRow2 = v21 * cInfo.w1 + v22 * cInfo.w2; // Interpolate X at Row 2
+
+        const res = valRow1 * rInfo.w1 + valRow2 * rInfo.w2; // Interpolate Y
+
+        return res;
+    }
+    /**
+     * [EXPERIMENTAL] Auto-generates a WOT Curve based on the Tuned VE Map (100% Load Column).
+     * Logic: NewWOT(rpm) = NewVE(rpm, 100%) * (StockWOT(rpm) / StockVE(rpm, 100%))
+     */
+    /**
+     * [EXPERIMENTAL] Auto-generates a WOT Map (3x18) based on the Tuned VE Map (High Load).
+     * Logic: NewWOT(rpm) = NewVE_Intep(rpm, maxLoad) * (StockWOT(rpm) / StockVE_Interp(rpm, maxLoad))
+     */
+    public generateWOTMap(newVEMap: VEMap): number[][] {
+        const stockVE = { // Construct VEMap object for Stock Data
+            xAxis: APP_CONFIG.MSS54HP.AXIS_RPM,
+            yAxis: APP_CONFIG.MSS54HP.AXIS_LOAD,
+            data: CSL_STOCK_MAP_DATA
+        };
+        const stockWOT = CSL_STOCK_WOT_MAP;
+        const targetRpmAxis = CSL_STOCK_WOT_RPM;
+
+        // Define "WOT Load" as the maximum load in the main map (e.g. 100% or highest defined)
+        // We use the last value of the stock load axis.
+        const maxLoad = APP_CONFIG.MSS54HP.AXIS_LOAD[APP_CONFIG.MSS54HP.AXIS_LOAD.length - 1];
+
+        // Validation
+        if (stockWOT[0].length !== targetRpmAxis.length) {
+            console.warn("Stock WOT Map dimensions mismatch constants. Returning empty.");
+            return [];
+        }
+
+        const calculatedRow: number[] = [];
+
+        // Calculate the 1D Curve first (using the first row of Stock WOT as reference)
+        for (let c = 0; c < targetRpmAxis.length; c++) {
+            const rpm = targetRpmAxis[c];
+            const sWotVal = stockWOT[0][c];
+
+            const sVE_Interp = this.interpolateMap(stockVE, rpm, maxLoad);
+            const nVE_Interp = this.interpolateMap(newVEMap, rpm, maxLoad);
+
+            const ratio = sVE_Interp !== 0 ? sWotVal / sVE_Interp : 1.0;
+            calculatedRow.push(nVE_Interp * ratio);
+        }
+
+        // Return 3 identical rows (matching Stock WOT structure)
+        return [
+            [...calculatedRow],
+            [...calculatedRow],
+            [...calculatedRow]
+        ];
     }
 }
